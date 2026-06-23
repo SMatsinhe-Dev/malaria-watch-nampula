@@ -409,7 +409,7 @@ function Index() {
                         tick={{ fontSize: 10 }}
                       />
                       <RTooltip
-                        formatter={(v: number) => v.toLocaleString("pt-PT")}
+                        formatter={(v) => Number(v).toLocaleString("pt-PT")}
                         cursor={{ fill: "rgba(0,0,0,0.04)" }}
                       />
                       <Bar dataKey="casos" radius={[0, 3, 3, 0]}>
