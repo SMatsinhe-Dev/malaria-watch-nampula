@@ -38,6 +38,12 @@ export const Route = createFileRoute("/")({
         content:
           "Centro de monitorização epidemiológica da malária em Nampula — mapas, indicadores e análise de risco.",
       },
+
+      {
+        property: "og:description",
+        content:
+          "Developed by Nádia Carrimo & Stélio Matsinhe.",
+      },
     ],
     links: [
       {
@@ -517,13 +523,14 @@ function Index() {
         )}
 
         <footer className="mt-6 pb-6 text-center text-xs text-slate-500">
-          Dados geográficos: geoBoundaries ADM2 · Casos: ilustrativos para fins de demonstração ·
+          Desenvolvido por Nádia Carrimo & Stélio Matsinhe· Dados geográficos: geoBoundaries ADM2 · Casos: ilustrativos para fins de demonstração ·
           Plataforma WebGIS · {new Date().getFullYear()}
         </footer>
       </main>
     </div>
   );
 }
+
 
 function Panel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
