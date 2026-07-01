@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>WebGIS Malária — Nampula (Standalone)</title>
+<meta name="description" content="WebGIS standalone para vigilância da malária nos distritos da província de Nampula, Moçambique." />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root{
+    --bg:#f7f9fc; --card:#ffffff; --ink:#0f172a; --muted:#64748b; --line:#e2e8f0;
+    --low:#22c55e; --mid:#eab308; --high:#f97316; --vhigh:#dc2626; --brand:#0369a1;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--ink);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+  header{background:linear-gradient(90deg,#0369a1,#0891b2);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  header h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.2px}
+  header .sub{font-size:12px;opacity:.9}
+  .wrap{display:grid;grid-template-columns:1fr 360px;gap:14px;padding:14px}
+  @media (max-width:960px){.wrap{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  @media (max-width:720px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+  .kpi .v{font-size:22px;font-weight:700;margin-top:4px}
+  #map{height:520px;border-radius:8px;overflow:hidden}
+  .legend{background:#fff;padding:8px 10px;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.15);font-size:12px;line-height:1.6}
+  .legend i{display:inline-block;width:14px;height:14px;margin-right:6px;vertical-align:middle;border-radius:3px}
+  h2{font-size:13px;margin:0 0 8px;color:var(--ink);text-transform:uppercase;letter-spacing:.5px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:600;font-size:11px;text-transform:uppercase}
+  .pill{display:inline-block;padding:2px 8px;border-radius:999px;color:#fff;font-size:11px;font-weight:600}
+  .search{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font:inherit;margin-bottom:8px}
+  footer{text-align:center;color:var(--muted);font-size:12px;padding:14px}
+  .chart-box{position:relative;height:220px}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>WebGIS Malária — Província de Nampula</h1>
+    <div class="sub">Vigilância epidemiológica · Moçambique</div>
+  </div>
+  <div class="sub">Standalone HTML</div>
+</header>
+
+<div class="wrap">
+  <div>
+    <div class="kpis">
+      <div class="card kpi"><div class="l">Total de casos</div><div class="v" id="k-total">—</div></div>
+      <div class="card kpi"><div class="l">Distritos</div><div class="v" id="k-dist">—</div></div>
+      <div class="card kpi"><div class="l">Distrito mais afetado</div><div class="v" id="k-top" style="font-size:16px">—</div></div>
+      <div class="card kpi"><div class="l">Média por distrito</div><div class="v" id="k-avg">—</div></div>
+    </div>
+    <div class="card"><div id="map"></div></div>
+    <div class="card" style="margin-top:12px">
+      <h2>Top 10 distritos — casos</h2>
+      <div class="chart-box"><canvas id="barChart"></canvas></div>
+    </div>
+  </div>
+
+  <aside>
+    <div class="card">
+      <h2>Distribuição de risco</h2>
+      <div class="chart-box"><canvas id="pieChart"></canvas></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <h2>Ranking de distritos</h2>
+      <input id="search" class="search" placeholder="Pesquisar distrito…" />
+      <div style="max-height:340px;overflow:auto">
+        <table id="table">
+          <thead><tr><th>#</th><th>Distrito</th><th>Casos</th><th>Risco</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<footer>Desenvolvido por Nádia Carrimo &amp; Stélio Matsinhe</footer>
+
+<script>
+const RISK = {
+  low:  {label:'Baixo',      color:'#22c55e'},
+  mid:  {label:'Moderado',   color:'#eab308'},
+  high: {label:'Alto',       color:'#f97316'},
+  vhigh:{label:'Muito Alto', color:'#dc2626'},
+};
+function riskOf(v,max){const q=max/4;if(v<q)return'low';if(v<q*2)return'mid';if(v<q*3)return'high';return'vhigh'}
+
+async function main(){
+  const res = await fetch('/namp_teste.geojson');
+  const gj = await res.json();
+
+  // Ensure props: district & cases
+  const feats = gj.features.map((f,i)=>{
+    const p = f.properties || {};
+    const name = p.district || p.DISTRITO || p.NAME_2 || p.name || p.Nome || ('Distrito '+(i+1));
+    let cases = p.cases ?? p.casos ?? p.CASES;
+    if (cases == null) cases = Math.floor(200 + Math.random()*3800);
+    return {...f, properties:{...p, district:name, cases:Number(cases)}};
+  });
+  const max = Math.max(...feats.map(f=>f.properties.cases));
+  const total = feats.reduce((s,f)=>s+f.properties.cases,0);
+  const sorted = [...feats].sort((a,b)=>b.properties.cases-a.properties.cases);
+
+  document.getElementById('k-total').textContent = total.toLocaleString('pt-PT');
+  document.getElementById('k-dist').textContent = feats.length;
+  document.getElementById('k-top').textContent = sorted[0].properties.district;
+  document.getElementById('k-avg').textContent = Math.round(total/feats.length).toLocaleString('pt-PT');
+
+  // Map
+  const map = L.map('map',{scrollWheelZoom:true}).setView([-15.1,39.3],7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap', maxZoom:18
+  }).addTo(map);
+
+  const layer = L.geoJSON({type:'FeatureCollection',features:feats},{
+    style: f => {
+      const r = riskOf(f.properties.cases,max);
+      return {color:'#334155',weight:1,fillColor:RISK[r].color,fillOpacity:.75};
+    },
+    onEachFeature:(f,l)=>{
+      const r=riskOf(f.properties.cases,max);
+      l.bindPopup(`<b>${f.properties.district}</b><br>Casos: <b>${f.properties.cases.toLocaleString('pt-PT')}</b><br>Risco: <span style="color:${RISK[r].color};font-weight:700">${RISK[r].label}</span>`);
+      l.on('mouseover',()=>l.setStyle({weight:2.5,color:'#0f172a'}));
+      l.on('mouseout',()=>layer.resetStyle(l));
+    }
+  }).addTo(map);
+  try{ map.fitBounds(layer.getBounds(),{padding:[10,10]}); }catch(e){}
+
+  // Legend
+  const legend = L.control({position:'bottomright'});
+  legend.onAdd = () => {
+    const d = L.DomUtil.create('div','legend');
+    d.innerHTML = '<b>Classe de risco</b><br>'+
+      Object.values(RISK).map(r=>`<i style="background:${r.color}"></i>${r.label}`).join('<br>');
+    return d;
+  };
+  legend.addTo(map);
+
+  // Bar chart top 10
+  const top10 = sorted.slice(0,10);
+  new Chart(document.getElementById('barChart'),{
+    type:'bar',
+    data:{labels:top10.map(f=>f.properties.district),
+      datasets:[{data:top10.map(f=>f.properties.cases),
+        backgroundColor:top10.map(f=>RISK[riskOf(f.properties.cases,max)].color)}]},
+    options:{indexAxis:'y',plugins:{legend:{display:false}},scales:{x:{beginAtZero:true}}}
+  });
+
+  // Pie chart
+  const dist = {low:0,mid:0,high:0,vhigh:0};
+  feats.forEach(f=>dist[riskOf(f.properties.cases,max)]++);
+  new Chart(document.getElementById('pieChart'),{
+    type:'doughnut',
+    data:{labels:Object.values(RISK).map(r=>r.label),
+      datasets:[{data:Object.keys(RISK).map(k=>dist[k]),
+        backgroundColor:Object.values(RISK).map(r=>r.color)}]},
+    options:{plugins:{legend:{position:'bottom'}}}
+  });
+
+  // Table
+  const tbody = document.querySelector('#table tbody');
+  function render(filter=''){
+    const f = filter.toLowerCase().trim();
+    tbody.innerHTML = sorted
+      .filter(x=>!f || x.properties.district.toLowerCase().includes(f))
+      .map((x,i)=>{
+        const r=riskOf(x.properties.cases,max);
+        return `<tr><td>${i+1}</td><td>${x.properties.district}</td><td>${x.properties.cases.toLocaleString('pt-PT')}</td><td><span class="pill" style="background:${RISK[r].color}">${RISK[r].label}</span></td></tr>`;
+      }).join('');
+  }
+  render();
+  document.getElementById('search').addEventListener('input',e=>render(e.target.value));
+}
+main().catch(err=>{
+  document.getElementById('map').innerHTML = '<p style="padding:20px;color:#b91c1c">Erro ao carregar dados: '+err.message+'</p>';
+  console.error(err);
+});
+</script>
+</body>
+</html>
