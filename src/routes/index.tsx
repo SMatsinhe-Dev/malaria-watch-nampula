@@ -263,11 +263,21 @@ function Index() {
               </p>
             </div>
           </div>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
-            <Upload className="h-3.5 w-3.5" />
-            Carregar GeoJSON
-            <input type="file" accept=".geojson,application/geo+json,application/json" onChange={onUpload} className="hidden" />
-          </label>
+          <div className="flex items-center gap-2">
+            <a
+              href="/standalone.html"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Versão HTML standalone
+            </a>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50">
+              <Upload className="h-3.5 w-3.5" />
+              Carregar GeoJSON
+              <input type="file" accept=".geojson,application/geo+json,application/json" onChange={onUpload} className="hidden" />
+            </label>
+          </div>
         </div>
       </header>
 
